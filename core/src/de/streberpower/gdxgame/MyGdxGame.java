@@ -3,22 +3,28 @@ package de.streberpower.gdxgame;
 import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.assets.AssetManager;
+import com.badlogic.gdx.graphics.Camera;
+import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.PerspectiveCamera;
+import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g3d.Environment;
 import com.badlogic.gdx.graphics.g3d.Model;
 import com.badlogic.gdx.graphics.g3d.ModelBatch;
 import com.badlogic.gdx.graphics.g3d.ModelInstance;
 import com.badlogic.gdx.graphics.g3d.attributes.ColorAttribute;
 import com.badlogic.gdx.graphics.g3d.environment.DirectionalLight;
-import com.badlogic.gdx.graphics.g3d.model.Node;
 import com.badlogic.gdx.graphics.g3d.utils.CameraInputController;
+import com.badlogic.gdx.math.Vector3;
+import com.badlogic.gdx.math.collision.BoundingBox;
+import com.badlogic.gdx.scenes.scene2d.Stage;
+import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.utils.Array;
 
 
 public class MyGdxGame extends ApplicationAdapter {
 
-    private static final String INVADERSCENE_MODEL = "invaderscene.g3db";
+    private static final String INVADER_SCENE_MODEL = "invaderscene.g3db";
     private static final String SHIP_TYPE = "ship";
     private static final String BLOCK_TYPE = "block";
     private static final String INVADER_TYPE = "invader";
@@ -30,19 +36,30 @@ public class MyGdxGame extends ApplicationAdapter {
     public Environment environment;
     public ModelBatch modelBatch;
 
-    public Array<ModelInstance> instances = new Array<ModelInstance>();
+    public Array<GameObject> instances = new Array<GameObject>();
 
     public AssetManager assets;
     public boolean loading;
-    public Array<ModelInstance> blocks = new Array<ModelInstance>();
-    public Array<ModelInstance> invaders = new Array<ModelInstance>();
-    public ModelInstance ship;
-    public ModelInstance space;
+    public Stage stage;
+    public Label label;
+    public BitmapFont font;
+    public StringBuilder sb;
+    public Array<GameObject> blocks = new Array<GameObject>();
+    public Array<GameObject> invaders = new Array<GameObject>();
+    public GameObject ship;
+    public GameObject space;
     //public Model model;
     //public ModelInstance instance;
+    private int visibleCount;
+    private Vector3 position = new Vector3();
 
     @Override
     public void create() {
+        stage = new Stage();
+        font = new BitmapFont();
+        label = new Label(" ", new Label.LabelStyle(font, Color.WHITE));
+        stage.addActor(label);
+        sb = new StringBuilder();
         environment = new Environment();
         environment.set(new ColorAttribute(ColorAttribute.AmbientLight, 0.4f, 0.4f, 0.4f, 1f));
         environment.add(new DirectionalLight().set(0.8f, 0.8f, 0.8f, -1f, -0.8f, -0.2f));
@@ -66,22 +83,15 @@ public class MyGdxGame extends ApplicationAdapter {
 
 
         assets = new AssetManager();
-        assets.load(INVADERSCENE_MODEL, Model.class);
+        assets.load(INVADER_SCENE_MODEL, Model.class);
         loading = true;
     }
 
     private void doneLoading() {
-        Model model = assets.get(INVADERSCENE_MODEL, Model.class);
+        Model model = assets.get(INVADER_SCENE_MODEL, Model.class);
         for (int i = 0; i < model.nodes.size; i++) {
             String id = model.nodes.get(i).id;
-            ModelInstance instance = new ModelInstance(model, id);
-            Node node = instance.getNode(id);
-
-            instance.transform.set(node.globalTransform);
-            node.translation.set(0, 0, 0);
-            node.scale.set(1, 1, 1);
-            node.rotation.idt();
-            instance.calculateTransforms();
+            GameObject instance = new GameObject(model, id, true);
 
             if (id.equals(SPACE_TYPE)) {
                 space = instance;
@@ -111,10 +121,33 @@ public class MyGdxGame extends ApplicationAdapter {
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT);
 
         modelBatch.begin(camera);
-        modelBatch.render(instances, environment);
+        visibleCount = 0;
+        for (final GameObject instance : instances) {
+            if (isVisible(camera, instance)) {
+                modelBatch.render(instance, environment);
+                visibleCount++;
+            }
+        }
         if (space != null)
             modelBatch.render(space);
         modelBatch.end();
+
+        sb.setLength(0);
+        sb.append(" FPS: ").append(Gdx.graphics.getFramesPerSecond());
+        sb.append(" Visible: ").append(visibleCount);
+        label.setText(sb);
+        stage.draw();
+    }
+
+    public boolean isVisible(final Camera camera, final GameObject instance) {
+        instance.transform.getTranslation(position);
+        position.add(instance.center);
+        return camera.frustum.sphereInFrustum(position, instance.radius);
+    }
+
+    @Override
+    public void resize(int width, int height) {
+        stage.getViewport().update(width, height, true);
     }
 
     @Override
@@ -122,5 +155,20 @@ public class MyGdxGame extends ApplicationAdapter {
         modelBatch.dispose();
         invaders.clear();
         assets.dispose();
+    }
+
+    public static class GameObject extends ModelInstance {
+        private static final BoundingBox bounds = new BoundingBox();
+        public final Vector3 center = new Vector3();
+        public final Vector3 dimensions = new Vector3();
+        public final float radius;
+
+        public GameObject(Model model, String rootNode, boolean mergeTransform) {
+            super(model, rootNode, mergeTransform);
+            calculateBoundingBox(bounds);
+            bounds.getCenter(center);
+            bounds.getDimensions(dimensions);
+            radius = dimensions.len() / 2f;
+        }
     }
 }
