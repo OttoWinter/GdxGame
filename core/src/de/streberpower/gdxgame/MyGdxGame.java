@@ -9,12 +9,14 @@ import com.badlogic.gdx.graphics.VertexAttributes;
 import com.badlogic.gdx.graphics.g3d.*;
 import com.badlogic.gdx.graphics.g3d.attributes.ColorAttribute;
 import com.badlogic.gdx.graphics.g3d.environment.DirectionalLight;
+import com.badlogic.gdx.graphics.g3d.utils.CameraInputController;
 import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder;
 
 
 public class MyGdxGame extends ApplicationAdapter {
     public Environment environment;
     public PerspectiveCamera camera;
+    public CameraInputController cameraController;
     public ModelBatch modelBatch;
     public Model model;
     public ModelInstance instance;
@@ -35,10 +37,13 @@ public class MyGdxGame extends ApplicationAdapter {
         model = modelBuilder.createBox(5f, 5f, 5f, new Material(ColorAttribute.createDiffuse(Color.GREEN)),
                 VertexAttributes.Usage.Position | VertexAttributes.Usage.Normal);
         instance = new ModelInstance(model);
+        cameraController = new CameraInputController(camera);
+        Gdx.input.setInputProcessor(cameraController);
     }
 
     @Override
     public void render() {
+        cameraController.update();
         Gdx.gl.glViewport(0, 0, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT);
 
