@@ -7,6 +7,9 @@ import de.streberpower.gdxgame.MyGdxGame;
 public class DesktopLauncher {
 	public static void main (String[] arg) {
 		LwjglApplicationConfiguration config = new LwjglApplicationConfiguration();
-		new LwjglApplication(new MyGdxGame(), config);
+        config.title = "GdxGame";
+        config.width = 480;
+        config.height = 320;
+        new LwjglApplication(new MyGdxGame(), config);
 	}
 }
