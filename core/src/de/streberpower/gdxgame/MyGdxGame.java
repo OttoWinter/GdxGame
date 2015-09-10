@@ -48,9 +48,6 @@ public class MyGdxGame extends ApplicationAdapter {
     public Array<GameObject> invaders = new Array<GameObject>();
     public GameObject ship;
     public GameObject space;
-    //public Model model;
-    //public ModelInstance instance;
-    private int visibleCount;
     private Vector3 position = new Vector3();
 
     @Override
@@ -107,6 +104,12 @@ public class MyGdxGame extends ApplicationAdapter {
             else if (id.startsWith(INVADER_TYPE))
                 invaders.add(instance);
         }
+        for (ModelInstance block : blocks) {
+            float r = 0.5f + 0.5f * (float) Math.random();
+            float g = 0.5f + 0.5f * (float) Math.random();
+            float b = 0.5f + 0.5f * (float) Math.random();
+            block.materials.get(0).set(ColorAttribute.createDiffuse(r, g, b, 1));
+        }
 
         loading = false;
     }
@@ -121,7 +124,7 @@ public class MyGdxGame extends ApplicationAdapter {
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT);
 
         modelBatch.begin(camera);
-        visibleCount = 0;
+        int visibleCount = 0;
         for (final GameObject instance : instances) {
             if (isVisible(camera, instance)) {
                 modelBatch.render(instance, environment);
