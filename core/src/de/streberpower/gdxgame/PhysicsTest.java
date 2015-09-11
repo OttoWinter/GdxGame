@@ -6,6 +6,7 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.PerspectiveCamera;
 import com.badlogic.gdx.graphics.VertexAttributes;
+import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g3d.*;
 import com.badlogic.gdx.graphics.g3d.attributes.ColorAttribute;
 import com.badlogic.gdx.graphics.g3d.environment.DirectionalLight;
@@ -15,11 +16,19 @@ import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.physics.bullet.Bullet;
 import com.badlogic.gdx.physics.bullet.collision.*;
+import com.badlogic.gdx.scenes.scene2d.Stage;
+import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.ArrayMap;
 import com.badlogic.gdx.utils.Disposable;
 
 public class PhysicsTest implements ApplicationListener {
+
+    final static short GROUND_FLAG = 1 << 8;
+    final static short OBJECT_FLAG = 1 << 9;
+    final static short ALL_FLAG = -1;
+    @SuppressWarnings("PointlessBitwiseExpression")
+    final static short NOT_GROUND_FLAG = ALL_FLAG ^ GROUND_FLAG;
 
     public PerspectiveCamera camera;
     public CameraInputController cameraController;
@@ -27,12 +36,18 @@ public class PhysicsTest implements ApplicationListener {
     public Array<GameObject> instances = new Array<GameObject>();
     public ArrayMap<String, GameObject.Constructor> constructors = new ArrayMap<String, GameObject.Constructor>();
     public Environment environment;
+    public Stage stage;
+    public Label label;
+    public BitmapFont font;
+    public StringBuilder sb;
 
     public Model model;
 
     private boolean collision;
     private btCollisionConfiguration collisionConfig;
     private btDispatcher dispatcher;
+    private btBroadphaseInterface broadphase;
+    private btCollisionWorld collisionWorld;
     private MyContactListener contactListener;
 
     private float spawnTimer;
@@ -45,11 +60,14 @@ public class PhysicsTest implements ApplicationListener {
         setupCamera();
         setupInputProcessor();
         populateScene();
-
-        contactListener = new MyContactListener();
     }
 
     private void populateScene() {
+        stage = new Stage();
+        font = new BitmapFont();
+        sb = new StringBuilder();
+        label = new Label(" ", new Label.LabelStyle(font, Color.WHITE));
+        stage.addActor(label);
         ModelBuilder mb = new ModelBuilder();
         mb.begin();
         mb.node().id = "ground";
@@ -90,10 +108,16 @@ public class PhysicsTest implements ApplicationListener {
         constructors.put("cylinder", new GameObject.Constructor(model, "cylinder",
                 new btCylinderShape(new Vector3(.5f, 1f, .5f))));
 
-        instances.add(constructors.get("ground").construct());
 
         collisionConfig = new btDefaultCollisionConfiguration();
         dispatcher = new btCollisionDispatcher(collisionConfig);
+        broadphase = new btDbvtBroadphase();
+        collisionWorld = new btCollisionWorld(dispatcher, broadphase, collisionConfig);
+        contactListener = new MyContactListener();
+
+        GameObject ground = constructors.get("ground").construct();
+        instances.add(ground);
+        collisionWorld.addCollisionObject(ground.body, GROUND_FLAG, NOT_GROUND_FLAG);
     }
 
     private void setupInputProcessor() {
@@ -127,9 +151,10 @@ public class PhysicsTest implements ApplicationListener {
             if (obj.moving) {
                 obj.transform.trn(0f, -delta, 0f);
                 obj.body.setWorldTransform(obj.transform);
-                checkCollision(obj.body, instances.get(0).body);
             }
         }
+
+        collisionWorld.performDiscreteCollisionDetection();
         if ((spawnTimer -= delta) < 0) {
             spawn();
             spawnTimer = 1.5f;
@@ -144,6 +169,11 @@ public class PhysicsTest implements ApplicationListener {
         modelBatch.render(instances, environment);
         modelBatch.end();
 
+        sb.setLength(0);
+        sb.append(" FPS: ").append(Gdx.graphics.getFramesPerSecond());
+        label.setText(sb);
+        stage.draw();
+
     }
 
     private void spawn() {
@@ -155,28 +185,7 @@ public class PhysicsTest implements ApplicationListener {
         obj.body.setUserValue(instances.size);
         obj.body.setCollisionFlags(obj.body.getCollisionFlags() | btCollisionObject.CollisionFlags.CF_CUSTOM_MATERIAL_CALLBACK);
         instances.add(obj);
-    }
-
-    private boolean checkCollision(btCollisionObject obj0, btCollisionObject obj1) {
-        CollisionObjectWrapper co0 = new CollisionObjectWrapper(obj0);
-        CollisionObjectWrapper co1 = new CollisionObjectWrapper(obj1);
-
-        btCollisionAlgorithm algorithm = dispatcher.findAlgorithm(co0.wrapper, co1.wrapper);
-
-        btDispatcherInfo info = new btDispatcherInfo();
-        btManifoldResult result = new btManifoldResult(co0.wrapper, co1.wrapper);
-
-        algorithm.processCollision(co0.wrapper, co1.wrapper, info, result);
-
-        boolean r = result.getPersistentManifold().getNumContacts() > 0;
-
-        dispatcher.freeCollisionAlgorithm(algorithm.getCPointer());
-        result.dispose();
-        info.dispose();
-        co1.dispose();
-        co0.dispose();
-
-        return r;
+        collisionWorld.addCollisionObject(obj.body, OBJECT_FLAG, GROUND_FLAG);
     }
 
     @Override
@@ -199,8 +208,11 @@ public class PhysicsTest implements ApplicationListener {
             ctor.dispose();
         constructors.clear();
 
+        collisionWorld.dispose();
+        broadphase.dispose();
         dispatcher.dispose();
         collisionConfig.dispose();
+
 
         modelBatch.dispose();
         model.dispose();
