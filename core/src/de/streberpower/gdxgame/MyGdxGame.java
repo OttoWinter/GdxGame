@@ -1,17 +1,13 @@
 package de.streberpower.gdxgame;
 
-import com.badlogic.gdx.ApplicationAdapter;
-import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.*;
 import com.badlogic.gdx.assets.AssetManager;
 import com.badlogic.gdx.graphics.Camera;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.PerspectiveCamera;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
-import com.badlogic.gdx.graphics.g3d.Environment;
-import com.badlogic.gdx.graphics.g3d.Model;
-import com.badlogic.gdx.graphics.g3d.ModelBatch;
-import com.badlogic.gdx.graphics.g3d.ModelInstance;
+import com.badlogic.gdx.graphics.g3d.*;
 import com.badlogic.gdx.graphics.g3d.attributes.ColorAttribute;
 import com.badlogic.gdx.graphics.g3d.environment.DirectionalLight;
 import com.badlogic.gdx.graphics.g3d.utils.CameraInputController;
@@ -22,7 +18,7 @@ import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.utils.Array;
 
 
-public class MyGdxGame extends ApplicationAdapter {
+public class MyGdxGame extends InputAdapter implements ApplicationListener {
 
     private static final String INVADER_SCENE_MODEL = "invaderscene.g3db";
     private static final String SHIP_TYPE = "ship";
@@ -49,6 +45,9 @@ public class MyGdxGame extends ApplicationAdapter {
     public GameObject ship;
     public GameObject space;
     private Vector3 position = new Vector3();
+    private int selected = -1, selecting = -1;
+    private Material selectionMaterial;
+    private Material originalMaterial;
 
     @Override
     public void create() {
@@ -71,7 +70,7 @@ public class MyGdxGame extends ApplicationAdapter {
         camera.update();
 
         cameraController = new CameraInputController(camera);
-        Gdx.input.setInputProcessor(cameraController);
+        Gdx.input.setInputProcessor(new InputMultiplexer(this, cameraController));
 
         //model = modelBuilder.createBox(5f, 5f, 5f, new Material(ColorAttribute.createDiffuse(Color.GREEN)),
         //        VertexAttributes.Usage.Position | VertexAttributes.Usage.Normal);
@@ -82,6 +81,10 @@ public class MyGdxGame extends ApplicationAdapter {
         assets = new AssetManager();
         assets.load(INVADER_SCENE_MODEL, Model.class);
         loading = true;
+
+        selectionMaterial = new Material();
+        selectionMaterial.set(ColorAttribute.createDiffuse(Color.ORANGE));
+        originalMaterial = new Material();
     }
 
     private void doneLoading() {
@@ -103,12 +106,6 @@ public class MyGdxGame extends ApplicationAdapter {
                 blocks.add(instance);
             else if (id.startsWith(INVADER_TYPE))
                 invaders.add(instance);
-        }
-        for (ModelInstance block : blocks) {
-            float r = 0.5f + 0.5f * (float) Math.random();
-            float g = 0.5f + 0.5f * (float) Math.random();
-            float b = 0.5f + 0.5f * (float) Math.random();
-            block.materials.get(0).set(ColorAttribute.createDiffuse(r, g, b, 1));
         }
 
         loading = false;
@@ -140,6 +137,16 @@ public class MyGdxGame extends ApplicationAdapter {
         sb.append(" Visible: ").append(visibleCount);
         label.setText(sb);
         stage.draw();
+    }
+
+    @Override
+    public void pause() {
+
+    }
+
+    @Override
+    public void resume() {
+
     }
 
     public boolean isVisible(final Camera camera, final GameObject instance) {
