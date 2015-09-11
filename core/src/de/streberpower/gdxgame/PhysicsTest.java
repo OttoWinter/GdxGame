@@ -10,11 +10,13 @@ import com.badlogic.gdx.graphics.g3d.environment.DirectionalLight;
 import com.badlogic.gdx.graphics.g3d.utils.CameraInputController;
 import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder;
 import com.badlogic.gdx.math.MathUtils;
+import com.badlogic.gdx.math.Matrix4;
 import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.math.collision.BoundingBox;
 import com.badlogic.gdx.physics.bullet.Bullet;
 import com.badlogic.gdx.physics.bullet.collision.*;
 import com.badlogic.gdx.physics.bullet.dynamics.*;
+import com.badlogic.gdx.physics.bullet.linearmath.btMotionState;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.utils.Array;
@@ -23,12 +25,12 @@ import com.badlogic.gdx.utils.Disposable;
 
 public class PhysicsTest implements ApplicationListener {
 
+    public static final int NONE_FLAG = 0;
     final static short GROUND_FLAG = 1 << 8;
     final static short OBJECT_FLAG = 1 << 9;
     final static short ALL_FLAG = -1;
     @SuppressWarnings("PointlessBitwiseExpression")
     final static short NOT_GROUND_FLAG = ALL_FLAG ^ GROUND_FLAG;
-
     public PerspectiveCamera camera;
     public CameraInputController cameraController;
     public ModelBatch modelBatch;
@@ -123,6 +125,8 @@ public class PhysicsTest implements ApplicationListener {
         ground.body.setUserValue(0);
         instances.add(ground);
         dynamicsWorld.addRigidBody(ground.body, GROUND_FLAG, NOT_GROUND_FLAG);
+        ground.body.setContactCallbackFlag(GROUND_FLAG);
+        ground.body.setContactCallbackFilter(NONE_FLAG);
     }
 
     private void setupInputProcessor() {
@@ -154,9 +158,6 @@ public class PhysicsTest implements ApplicationListener {
 
         dynamicsWorld.stepSimulation(delta, 5, 1 / 60f);
 
-        for (GameObject obj : instances) {
-            obj.body.getWorldTransform(obj.transform);
-        }
         if ((spawnTimer -= delta) < 0) {
             spawn();
             spawnTimer = 0.25f;
@@ -188,11 +189,13 @@ public class PhysicsTest implements ApplicationListener {
         GameObject obj = constructors.values[1 + MathUtils.random(constructors.size - 2)].construct();
         obj.transform.setFromEulerAngles(MathUtils.random(360f), MathUtils.random(360f), MathUtils.random(360f));
         obj.transform.trn(MathUtils.random(-2.5f, 2.5f), 9f, MathUtils.random(-2.5f, 2.5f));
-        obj.body.setWorldTransform(obj.transform);
+        obj.body.proceedToTransform(obj.transform);
         obj.body.setUserValue(instances.size);
         obj.body.setCollisionFlags(obj.body.getCollisionFlags() | btCollisionObject.CollisionFlags.CF_CUSTOM_MATERIAL_CALLBACK);
         instances.add(obj);
         dynamicsWorld.addRigidBody(obj.body, OBJECT_FLAG, ALL_FLAG);
+        obj.body.setContactCallbackFlag(OBJECT_FLAG);
+        obj.body.setContactCallbackFilter(GROUND_FLAG);
     }
 
     @Override
@@ -230,16 +233,20 @@ public class PhysicsTest implements ApplicationListener {
     static class GameObject extends ModelInstance implements Disposable {
         private final static Vector3 position = new Vector3();
         private static final BoundingBox bounds = new BoundingBox();
-        public final btRigidBody body;
         public final Vector3 center = new Vector3();
         public final Vector3 dimensions = new Vector3();
+        public final btRigidBody body;
+        public final MyMotionState motionState;
 
         public GameObject(Model model, String node, btRigidBody.btRigidBodyConstructionInfo constructionInfo) {
             super(model, node);
+            motionState = new MyMotionState();
+            motionState.transform = transform;
             calculateBoundingBox(bounds);
             bounds.getCenter(center);
             bounds.getDimensions(dimensions);
             body = new btRigidBody(constructionInfo);
+            body.setMotionState(motionState);
         }
 
         public boolean isVisible(final Camera camera) {
@@ -249,6 +256,7 @@ public class PhysicsTest implements ApplicationListener {
         @Override
         public void dispose() {
             body.dispose();
+            motionState.dispose();
         }
 
         static class Constructor implements Disposable {
@@ -277,16 +285,28 @@ public class PhysicsTest implements ApplicationListener {
         }
     }
 
+    static class MyMotionState extends btMotionState {
+        Matrix4 transform;
+
+        @Override
+        public void getWorldTransform(Matrix4 worldTrans) {
+            worldTrans.set(transform);
+        }
+
+        @Override
+        public void setWorldTransform(Matrix4 worldTrans) {
+            transform.set(worldTrans);
+        }
+    }
+
     class MyContactListener extends ContactListener {
         @Override
-        public boolean onContactAdded(int userValue0, int partId0, int index0,
-                                      int userValue1, int partId1, int index1) {
-            if (userValue0 != 0 && userValue1 == 0)
-                ((ColorAttribute) instances.get(userValue0).materials.get(0).
-                        get(ColorAttribute.Diffuse)).color.set(Color.WHITE);
-            if (userValue1 != 0 && userValue0 == 0)
-                ((ColorAttribute) instances.get(userValue1).materials.get(0).
-                        get(ColorAttribute.Diffuse)).color.set(Color.WHITE);
+        public boolean onContactAdded(int userValue0, int partId0, int index0, boolean match0,
+                                      int userValue1, int partId1, int index1, boolean match1) {
+            if (match0)
+                ((ColorAttribute) instances.get(userValue0).materials.get(0).get(ColorAttribute.Diffuse)).color.set(Color.WHITE);
+            if (match1)
+                ((ColorAttribute) instances.get(userValue1).materials.get(0).get(ColorAttribute.Diffuse)).color.set(Color.WHITE);
             return true;
         }
     }
