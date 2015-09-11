@@ -2,8 +2,7 @@ package de.streberpower.gdxgame.desktop;
 
 import com.badlogic.gdx.backends.lwjgl.LwjglApplication;
 import com.badlogic.gdx.backends.lwjgl.LwjglApplicationConfiguration;
-import de.streberpower.gdxgame.GdxShaderTest;
-import de.streberpower.gdxgame.MyGdxGame;
+import de.streberpower.gdxgame.PhyiscsTest;
 
 public class DesktopLauncher {
 	public static void main (String[] arg) {
@@ -11,6 +10,6 @@ public class DesktopLauncher {
         //config.title = "GdxGame";
         //config.width = 480;
         //config.height = 320;
-		new LwjglApplication(new MyGdxGame(), config);
+		new LwjglApplication(new PhyiscsTest(), config);
 	}
 }
