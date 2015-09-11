@@ -1,6 +1,9 @@
 package de.streberpower.gdxgame;
 
-import com.badlogic.gdx.*;
+import com.badlogic.gdx.ApplicationListener;
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.InputAdapter;
+import com.badlogic.gdx.InputMultiplexer;
 import com.badlogic.gdx.assets.AssetManager;
 import com.badlogic.gdx.graphics.Camera;
 import com.badlogic.gdx.graphics.Color;
@@ -11,8 +14,10 @@ import com.badlogic.gdx.graphics.g3d.*;
 import com.badlogic.gdx.graphics.g3d.attributes.ColorAttribute;
 import com.badlogic.gdx.graphics.g3d.environment.DirectionalLight;
 import com.badlogic.gdx.graphics.g3d.utils.CameraInputController;
+import com.badlogic.gdx.math.Intersector;
 import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.math.collision.BoundingBox;
+import com.badlogic.gdx.math.collision.Ray;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.utils.Array;
@@ -135,6 +140,7 @@ public class MyGdxGame extends InputAdapter implements ApplicationListener {
         sb.setLength(0);
         sb.append(" FPS: ").append(Gdx.graphics.getFramesPerSecond());
         sb.append(" Visible: ").append(visibleCount);
+        sb.append(" Selected: ").append(selected);
         label.setText(sb);
         stage.draw();
     }
@@ -153,6 +159,63 @@ public class MyGdxGame extends InputAdapter implements ApplicationListener {
         instance.transform.getTranslation(position);
         position.add(instance.center);
         return camera.frustum.sphereInFrustum(position, instance.radius);
+    }
+
+    @Override
+    public boolean touchDown(int screenX, int screenY, int pointer, int button) {
+        selecting = getObject(screenX, screenY);
+        return selecting >= 0;
+    }
+
+    @Override
+    public boolean touchDragged(int screenX, int screenY, int pointer) {
+        return selecting >= 0;
+    }
+
+    @Override
+    public boolean touchUp(int screenX, int screenY, int pointer, int button) {
+        if (selecting >= 0) {
+            if (selecting == getObject(screenX, screenY))
+                setSelected(selecting);
+            selecting = -1;
+            return true;
+        }
+        return false;
+    }
+
+    public void setSelected(int value) {
+        if (selected == value) return;
+        if (selected >= 0) {
+            Material mat = instances.get(selected).materials.get(0);
+            mat.clear();
+            mat.set(originalMaterial);
+        }
+        selected = value;
+        if (selected >= 0) {
+            Material mat = instances.get(selected).materials.get(0);
+            originalMaterial.clear();
+            originalMaterial.set(mat);
+            mat.clear();
+            mat.set(selectionMaterial);
+        }
+    }
+
+    public int getObject(int screenX, int screenY) {
+        Ray ray = camera.getPickRay(screenX, screenY);
+        int result = -1;
+        float distance = -1;
+        for (int i = 0; i < instances.size; i++) {
+            final GameObject instance = instances.get(i);
+            instance.transform.getTranslation(position);
+            position.add(instance.center);
+            float dist2 = ray.origin.dst2(position);
+            if (distance >= 0f && dist2 > distance) continue;
+            if (Intersector.intersectRaySphere(ray, position, instance.radius, null)) {
+                result = i;
+                distance = dist2;
+            }
+        }
+        return result;
     }
 
     @Override
