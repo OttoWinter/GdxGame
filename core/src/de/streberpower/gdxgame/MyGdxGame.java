@@ -250,7 +250,6 @@ public class MyGdxGame extends InputAdapter implements ApplicationListener {
 
     public static class GameObject extends ModelInstance {
         private static final BoundingBox bounds = new BoundingBox();
-        private final static Vector3 position = new Vector3();
         public final Vector3 center = new Vector3();
         public final Vector3 dimensions = new Vector3();
         public final float radius;

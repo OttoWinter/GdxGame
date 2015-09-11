@@ -2,10 +2,7 @@ package de.streberpower.gdxgame;
 
 import com.badlogic.gdx.ApplicationListener;
 import com.badlogic.gdx.Gdx;
-import com.badlogic.gdx.graphics.Color;
-import com.badlogic.gdx.graphics.GL20;
-import com.badlogic.gdx.graphics.PerspectiveCamera;
-import com.badlogic.gdx.graphics.VertexAttributes;
+import com.badlogic.gdx.graphics.*;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g3d.*;
 import com.badlogic.gdx.graphics.g3d.attributes.ColorAttribute;
@@ -14,6 +11,7 @@ import com.badlogic.gdx.graphics.g3d.utils.CameraInputController;
 import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Vector3;
+import com.badlogic.gdx.math.collision.BoundingBox;
 import com.badlogic.gdx.physics.bullet.Bullet;
 import com.badlogic.gdx.physics.bullet.collision.*;
 import com.badlogic.gdx.physics.bullet.dynamics.*;
@@ -122,6 +120,7 @@ public class PhysicsTest implements ApplicationListener {
         contactListener = new MyContactListener();
 
         GameObject ground = constructors.get("ground").construct();
+        ground.body.setUserValue(0);
         instances.add(ground);
         dynamicsWorld.addRigidBody(ground.body, GROUND_FLAG, NOT_GROUND_FLAG);
     }
@@ -155,8 +154,9 @@ public class PhysicsTest implements ApplicationListener {
 
         dynamicsWorld.stepSimulation(delta, 5, 1 / 60f);
 
-        for (GameObject obj : instances)
+        for (GameObject obj : instances) {
             obj.body.getWorldTransform(obj.transform);
+        }
         if ((spawnTimer -= delta) < 0) {
             spawn();
             spawnTimer = 0.25f;
@@ -168,11 +168,17 @@ public class PhysicsTest implements ApplicationListener {
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT);
 
         modelBatch.begin(camera);
-        modelBatch.render(instances, environment);
+        int visibleCount = 0;
+        for (GameObject obj : instances)
+            if (obj.isVisible(camera)) {
+                modelBatch.render(obj, environment);
+                visibleCount++;
+            }
         modelBatch.end();
 
         sb.setLength(0);
         sb.append(" FPS: ").append(Gdx.graphics.getFramesPerSecond());
+        sb.append(" Visible: ").append(visibleCount);
         label.setText(sb);
         stage.draw();
 
@@ -180,7 +186,6 @@ public class PhysicsTest implements ApplicationListener {
 
     private void spawn() {
         GameObject obj = constructors.values[1 + MathUtils.random(constructors.size - 2)].construct();
-        obj.moving = true;
         obj.transform.setFromEulerAngles(MathUtils.random(360f), MathUtils.random(360f), MathUtils.random(360f));
         obj.transform.trn(MathUtils.random(-2.5f, 2.5f), 9f, MathUtils.random(-2.5f, 2.5f));
         obj.body.setWorldTransform(obj.transform);
@@ -216,17 +221,29 @@ public class PhysicsTest implements ApplicationListener {
         dispatcher.dispose();
         collisionConfig.dispose();
 
+        contactListener.dispose();
+
         modelBatch.dispose();
         model.dispose();
     }
 
     static class GameObject extends ModelInstance implements Disposable {
+        private final static Vector3 position = new Vector3();
+        private static final BoundingBox bounds = new BoundingBox();
         public final btRigidBody body;
-        public boolean moving;
+        public final Vector3 center = new Vector3();
+        public final Vector3 dimensions = new Vector3();
 
         public GameObject(Model model, String node, btRigidBody.btRigidBodyConstructionInfo constructionInfo) {
             super(model, node);
+            calculateBoundingBox(bounds);
+            bounds.getCenter(center);
+            bounds.getDimensions(dimensions);
             body = new btRigidBody(constructionInfo);
+        }
+
+        public boolean isVisible(final Camera camera) {
+            return camera.frustum.boundsInFrustum(transform.getTranslation(position).add(center), dimensions);
         }
 
         @Override
@@ -262,10 +279,14 @@ public class PhysicsTest implements ApplicationListener {
 
     class MyContactListener extends ContactListener {
         @Override
-        public boolean onContactAdded(btCollisionObject colObj0, int partId0, int index0,
-                                      btCollisionObject colObj1, int partId1, int index1) {
-            instances.get(colObj0.getUserValue()).moving = false;
-            instances.get(colObj1.getUserValue()).moving = false;
+        public boolean onContactAdded(int userValue0, int partId0, int index0,
+                                      int userValue1, int partId1, int index1) {
+            if (userValue0 != 0 && userValue1 == 0)
+                ((ColorAttribute) instances.get(userValue0).materials.get(0).
+                        get(ColorAttribute.Diffuse)).color.set(Color.WHITE);
+            if (userValue1 != 0 && userValue0 == 0)
+                ((ColorAttribute) instances.get(userValue1).materials.get(0).
+                        get(ColorAttribute.Diffuse)).color.set(Color.WHITE);
             return true;
         }
     }
