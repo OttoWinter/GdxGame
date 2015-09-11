@@ -16,6 +16,7 @@ import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.physics.bullet.Bullet;
 import com.badlogic.gdx.physics.bullet.collision.*;
+import com.badlogic.gdx.physics.bullet.dynamics.*;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.utils.Array;
@@ -43,11 +44,11 @@ public class PhysicsTest implements ApplicationListener {
 
     public Model model;
 
-    private boolean collision;
     private btCollisionConfiguration collisionConfig;
     private btDispatcher dispatcher;
     private btBroadphaseInterface broadphase;
-    private btCollisionWorld collisionWorld;
+    private btDynamicsWorld dynamicsWorld;
+    private btConstraintSolver constraintSolver;
     private MyContactListener contactListener;
 
     private float spawnTimer;
@@ -60,6 +61,7 @@ public class PhysicsTest implements ApplicationListener {
         setupCamera();
         setupInputProcessor();
         populateScene();
+        setupPhysics();
     }
 
     private void populateScene() {
@@ -73,9 +75,9 @@ public class PhysicsTest implements ApplicationListener {
         mb.node().id = "ground";
         mb.part("ground", GL20.GL_TRIANGLES, VertexAttributes.Usage.Position | VertexAttributes.Usage.Normal,
                 new Material(ColorAttribute.createDiffuse(Color.RED))).box(5f, 1f, 5f);
-        mb.node().id = "ball";
+        mb.node().id = "sphere";
         mb.part("sphere", GL20.GL_TRIANGLES, VertexAttributes.Usage.Position | VertexAttributes.Usage.Normal,
-                new Material(ColorAttribute.createDiffuse(Color.GREEN))).sphere(1f, 1f, 1f, 16, 16);
+                new Material(ColorAttribute.createDiffuse(Color.GREEN))).sphere(1f, 1f, 1f, 10, 10);
         mb.node().id = "box";
         mb.part("box", GL20.GL_TRIANGLES, VertexAttributes.Usage.Position | VertexAttributes.Usage.Normal,
                 new Material(ColorAttribute.createDiffuse(Color.BLUE)))
@@ -93,31 +95,35 @@ public class PhysicsTest implements ApplicationListener {
                 new Material(ColorAttribute.createDiffuse(Color.MAGENTA)))
                 .cylinder(1f, 2f, 1f, 10);
         model = mb.end();
+    }
 
+    private void setupPhysics() {
         constructors = new ArrayMap<String, GameObject.Constructor>(String.class, GameObject.Constructor.class);
         constructors.put("ground", new GameObject.Constructor(model, "ground",
-                new btBoxShape(new Vector3(2.5f, 0.5f, 2.5f))));
+                new btBoxShape(new Vector3(2.5f, 0.5f, 2.5f)), 0f));
         constructors.put("sphere", new GameObject.Constructor(model, "sphere",
-                new btSphereShape(0.5f)));
+                new btSphereShape(0.5f), 1f));
         constructors.put("box", new GameObject.Constructor(model, "box",
-                new btBoxShape(new Vector3(0.5f, 0.5f, 0.5f))));
+                new btBoxShape(new Vector3(0.5f, 0.5f, 0.5f)), 1f));
         constructors.put("cone", new GameObject.Constructor(model, "cone",
-                new btConeShape(0.5f, 2f)));
+                new btConeShape(0.5f, 2f), 1f));
         constructors.put("capsule", new GameObject.Constructor(model, "capsule",
-                new btCapsuleShape(.5f, 1f)));
+                new btCapsuleShape(.5f, 1f), 1f));
         constructors.put("cylinder", new GameObject.Constructor(model, "cylinder",
-                new btCylinderShape(new Vector3(.5f, 1f, .5f))));
+                new btCylinderShape(new Vector3(.5f, 1f, .5f)), 1f));
 
 
         collisionConfig = new btDefaultCollisionConfiguration();
         dispatcher = new btCollisionDispatcher(collisionConfig);
         broadphase = new btDbvtBroadphase();
-        collisionWorld = new btCollisionWorld(dispatcher, broadphase, collisionConfig);
+        constraintSolver = new btSequentialImpulseConstraintSolver();
+        dynamicsWorld = new btDiscreteDynamicsWorld(dispatcher, broadphase, constraintSolver, collisionConfig);
+        dynamicsWorld.setGravity(new Vector3(0, -10f, 0));
         contactListener = new MyContactListener();
 
         GameObject ground = constructors.get("ground").construct();
         instances.add(ground);
-        collisionWorld.addCollisionObject(ground.body, GROUND_FLAG, NOT_GROUND_FLAG);
+        dynamicsWorld.addRigidBody(ground.body, GROUND_FLAG, NOT_GROUND_FLAG);
     }
 
     private void setupInputProcessor() {
@@ -147,17 +153,13 @@ public class PhysicsTest implements ApplicationListener {
     public void render() {
         final float delta = Math.min(1f / 30f, Gdx.graphics.getDeltaTime());
 
-        for (GameObject obj : instances) {
-            if (obj.moving) {
-                obj.transform.trn(0f, -delta, 0f);
-                obj.body.setWorldTransform(obj.transform);
-            }
-        }
+        dynamicsWorld.stepSimulation(delta, 5, 1 / 60f);
 
-        collisionWorld.performDiscreteCollisionDetection();
+        for (GameObject obj : instances)
+            obj.body.getWorldTransform(obj.transform);
         if ((spawnTimer -= delta) < 0) {
             spawn();
-            spawnTimer = 1.5f;
+            spawnTimer = 0.25f;
         }
 
         cameraController.update();
@@ -185,7 +187,7 @@ public class PhysicsTest implements ApplicationListener {
         obj.body.setUserValue(instances.size);
         obj.body.setCollisionFlags(obj.body.getCollisionFlags() | btCollisionObject.CollisionFlags.CF_CUSTOM_MATERIAL_CALLBACK);
         instances.add(obj);
-        collisionWorld.addCollisionObject(obj.body, OBJECT_FLAG, GROUND_FLAG);
+        dynamicsWorld.addRigidBody(obj.body, OBJECT_FLAG, ALL_FLAG);
     }
 
     @Override
@@ -208,24 +210,23 @@ public class PhysicsTest implements ApplicationListener {
             ctor.dispose();
         constructors.clear();
 
-        collisionWorld.dispose();
+        dynamicsWorld.dispose();
+        constraintSolver.dispose();
         broadphase.dispose();
         dispatcher.dispose();
         collisionConfig.dispose();
-
 
         modelBatch.dispose();
         model.dispose();
     }
 
     static class GameObject extends ModelInstance implements Disposable {
-        public final btCollisionObject body;
+        public final btRigidBody body;
         public boolean moving;
 
-        public GameObject(Model model, String node, btCollisionShape shape) {
+        public GameObject(Model model, String node, btRigidBody.btRigidBodyConstructionInfo constructionInfo) {
             super(model, node);
-            body = new btCollisionObject();
-            body.setCollisionShape(shape);
+            body = new btRigidBody(constructionInfo);
         }
 
         @Override
@@ -234,23 +235,27 @@ public class PhysicsTest implements ApplicationListener {
         }
 
         static class Constructor implements Disposable {
+            private static Vector3 localInertia = new Vector3();
             public final Model model;
             public final String node;
             public final btCollisionShape shape;
+            public final btRigidBody.btRigidBodyConstructionInfo constructionInfo;
 
-            public Constructor(Model model, String node, btCollisionShape shape) {
+            public Constructor(Model model, String node, btCollisionShape shape, float mass) {
                 this.model = model;
                 this.node = node;
                 this.shape = shape;
+                this.constructionInfo = new btRigidBody.btRigidBodyConstructionInfo(mass, null, shape, localInertia);
             }
 
             public GameObject construct() {
-                return new GameObject(model, node, shape);
+                return new GameObject(model, node, constructionInfo);
             }
 
             @Override
             public void dispose() {
                 shape.dispose();
+                constructionInfo.dispose();
             }
         }
     }
