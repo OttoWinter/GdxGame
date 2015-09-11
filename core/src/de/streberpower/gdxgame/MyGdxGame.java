@@ -271,7 +271,7 @@ public class MyGdxGame extends InputAdapter implements ApplicationListener {
         public float intersects(Ray ray) {
             /*transform.getTranslation(position).add(center);
             final float len = ray.direction.dot(position.x - ray.origin.x, position.y - ray.origin.y,
-                    position.z  - ray.origin.z);
+                    position.z - ray.origin.z);
             if (len < 0f) return -1f;
             float dist2 = position.dst2(ray.origin.x + ray.direction.x * len, ray.origin.y + ray.direction.y * len,
                     ray.origin.z + ray.direction.z * len);
