@@ -48,10 +48,14 @@ public class MyGdxGame extends InputAdapter implements ApplicationListener {
     public Array<GameObject> invaders = new Array<GameObject>();
     public GameObject ship;
     public GameObject space;
+    protected Shape blockShape;
+    protected Shape invaderShape;
+    protected Shape shipShape;
     private Vector3 position = new Vector3();
     private int selected = -1, selecting = -1;
     private Material selectionMaterial;
     private Material originalMaterial;
+    private BoundingBox bounds = new BoundingBox();
 
     @Override
     public void create() {
@@ -104,12 +108,28 @@ public class MyGdxGame extends InputAdapter implements ApplicationListener {
 
             instances.add(instance);
 
-            if (id.equals(SHIP_TYPE))
+            if (id.equals(SHIP_TYPE)) {
+                if (shipShape == null) {
+                    instance.calculateBoundingBox(bounds);
+                    shipShape = new BaseShape.Sphere(bounds);
+                }
+                instance.shape = shipShape;
                 ship = instance;
-            else if (id.startsWith(BLOCK_TYPE))
+            } else if (id.startsWith(BLOCK_TYPE)) {
+                if (blockShape == null) {
+                    instance.calculateBoundingBox(bounds);
+                    blockShape = new BaseShape.Box(bounds);
+                }
+                instance.shape = blockShape;
                 blocks.add(instance);
-            else if (id.startsWith(INVADER_TYPE))
+            } else if (id.startsWith(INVADER_TYPE)) {
+                if (invaderShape == null) {
+                    instance.calculateBoundingBox(bounds);
+                    invaderShape = new BaseShape.Disc(bounds);
+                }
+                instance.shape = invaderShape;
                 invaders.add(instance);
+            }
         }
 
         loading = false;
@@ -127,7 +147,7 @@ public class MyGdxGame extends InputAdapter implements ApplicationListener {
         modelBatch.begin(camera);
         int visibleCount = 0;
         for (final GameObject instance : instances) {
-            if (instance.isVisibleTo(camera)) {
+            if (instance.isVisible(camera)) {
                 modelBatch.render(instance, environment);
                 visibleCount++;
             }
@@ -234,7 +254,7 @@ public class MyGdxGame extends InputAdapter implements ApplicationListener {
         public final Vector3 center = new Vector3();
         public final Vector3 dimensions = new Vector3();
         public final float radius;
-
+        public de.streberpower.gdxgame.Shape shape;
         public GameObject(Model model, String rootNode, boolean mergeTransform) {
             super(model, rootNode, mergeTransform);
             calculateBoundingBox(bounds);
@@ -243,18 +263,21 @@ public class MyGdxGame extends InputAdapter implements ApplicationListener {
             radius = dimensions.len() / 2f;
         }
 
-        public boolean isVisibleTo(final Camera camera) {
-            return camera.frustum.sphereInFrustum(transform.getTranslation(position).add(center), radius);
+        public boolean isVisible(final Camera camera) {
+            //return camera.frustum.sphereInFrustum(transform.getTranslation(position).add(center), radius);
+            return shape != null && shape.isVisible(transform, camera);
         }
 
         public float intersects(Ray ray) {
-            transform.getTranslation(position).add(center);
+            /*transform.getTranslation(position).add(center);
             final float len = ray.direction.dot(position.x - ray.origin.x, position.y - ray.origin.y,
                     position.z - ray.origin.z);
             if (len < 0f) return -1f;
             float dist2 = position.dst2(ray.origin.x + ray.direction.x * len, ray.origin.y + ray.direction.y * len,
                     ray.origin.z + ray.direction.z * len);
-            return (dist2 <= radius * radius) ? dist2 : -1f;
+            return (dist2 <= radius * radius) ? dist2 : -1f;*/
+            return shape == null ? -1f : shape.intersects(transform, ray);
         }
+
     }
 }
