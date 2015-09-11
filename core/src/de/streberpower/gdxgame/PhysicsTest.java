@@ -16,7 +16,7 @@ import com.badlogic.gdx.physics.bullet.Bullet;
 import com.badlogic.gdx.physics.bullet.collision.*;
 import com.badlogic.gdx.utils.Array;
 
-public class PhyiscsTest implements ApplicationListener {
+public class PhysicsTest implements ApplicationListener {
 
     public PerspectiveCamera camera;
     public CameraInputController cameraController;
