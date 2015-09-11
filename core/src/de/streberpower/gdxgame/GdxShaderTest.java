@@ -2,6 +2,7 @@ package de.streberpower.gdxgame;
 
 import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.PerspectiveCamera;
 import com.badlogic.gdx.graphics.VertexAttributes;
@@ -33,7 +34,7 @@ public class GdxShaderTest extends ApplicationAdapter {
         environment.add(new DirectionalLight().set(0.8f, 0.8f, 0.8f, -1f, -0.8f, -0.2f));
 
         camera = new PerspectiveCamera(67, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
-        camera.position.set(2f, 2f, 2f);
+        camera.position.set(0f, 8f, 8f);
         camera.lookAt(0, 0, 0);
         camera.near = 0.05f;
         camera.far = 300f;
@@ -48,7 +49,13 @@ public class GdxShaderTest extends ApplicationAdapter {
                         VertexAttributes.Usage.Normal | VertexAttributes.Usage.TextureCoordinates);
         for (int x = -5; x <= 5; x += 2) {
             for (int z = -5; z <= 5; z += 2) {
-                instances.add(new ModelInstance(model, x, 0, z));
+                ModelInstance instance = new ModelInstance(model, x, 0, z);
+                TestShader.TestColorAttribute attrUV = new TestShader.TestColorAttribute(
+                        TestShader.TestColorAttribute.DIFFUSE_UV,
+                        new Color((x + 5f) / 10f, 1f - (z + 5f) / 10f, 0, 1),
+                        new Color(1f - (x + 5f) / 10f, 0, 1f - (z + 5f) / 10f, 1));
+                instance.materials.get(0).set(attrUV);
+                instances.add(instance);
             }
         }
         shader = new TestShader();
