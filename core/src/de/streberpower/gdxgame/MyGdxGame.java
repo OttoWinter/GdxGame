@@ -14,7 +14,6 @@ import com.badlogic.gdx.graphics.g3d.*;
 import com.badlogic.gdx.graphics.g3d.attributes.ColorAttribute;
 import com.badlogic.gdx.graphics.g3d.environment.DirectionalLight;
 import com.badlogic.gdx.graphics.g3d.utils.CameraInputController;
-import com.badlogic.gdx.math.Intersector;
 import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.math.collision.BoundingBox;
 import com.badlogic.gdx.math.collision.Ray;
@@ -128,7 +127,7 @@ public class MyGdxGame extends InputAdapter implements ApplicationListener {
         modelBatch.begin(camera);
         int visibleCount = 0;
         for (final GameObject instance : instances) {
-            if (isVisible(camera, instance)) {
+            if (instance.isVisibleTo(camera)) {
                 modelBatch.render(instance, environment);
                 visibleCount++;
             }
@@ -155,11 +154,6 @@ public class MyGdxGame extends InputAdapter implements ApplicationListener {
 
     }
 
-    public boolean isVisible(final Camera camera, final GameObject instance) {
-        instance.transform.getTranslation(position);
-        position.add(instance.center);
-        return camera.frustum.sphereInFrustum(position, instance.radius);
-    }
 
     @Override
     public boolean touchDown(int screenX, int screenY, int pointer, int button) {
@@ -169,7 +163,15 @@ public class MyGdxGame extends InputAdapter implements ApplicationListener {
 
     @Override
     public boolean touchDragged(int screenX, int screenY, int pointer) {
-        return selecting >= 0;
+        if (selecting < 0)
+            return false;
+        if (selected == selecting) {
+            Ray ray = camera.getPickRay(screenX, screenY);
+            final float distance = -ray.origin.y / ray.direction.y;
+            position.set(ray.direction).scl(distance).add(ray.origin);
+            instances.get(selected).transform.setTranslation(position);
+        }
+        return true;
     }
 
     @Override
@@ -205,12 +207,8 @@ public class MyGdxGame extends InputAdapter implements ApplicationListener {
         int result = -1;
         float distance = -1;
         for (int i = 0; i < instances.size; i++) {
-            final GameObject instance = instances.get(i);
-            instance.transform.getTranslation(position);
-            position.add(instance.center);
-            float dist2 = ray.origin.dst2(position);
-            if (distance >= 0f && dist2 > distance) continue;
-            if (Intersector.intersectRaySphere(ray, position, instance.radius, null)) {
+            final float dist2 = instances.get(i).intersects(ray);
+            if (dist2 >= 0f && (distance < 0f || dist2 <= distance)) {
                 result = i;
                 distance = dist2;
             }
@@ -232,6 +230,7 @@ public class MyGdxGame extends InputAdapter implements ApplicationListener {
 
     public static class GameObject extends ModelInstance {
         private static final BoundingBox bounds = new BoundingBox();
+        private final static Vector3 position = new Vector3();
         public final Vector3 center = new Vector3();
         public final Vector3 dimensions = new Vector3();
         public final float radius;
@@ -242,6 +241,20 @@ public class MyGdxGame extends InputAdapter implements ApplicationListener {
             bounds.getCenter(center);
             bounds.getDimensions(dimensions);
             radius = dimensions.len() / 2f;
+        }
+
+        public boolean isVisibleTo(final Camera camera) {
+            return camera.frustum.sphereInFrustum(transform.getTranslation(position).add(center), radius);
+        }
+
+        public float intersects(Ray ray) {
+            transform.getTranslation(position).add(center);
+            final float len = ray.direction.dot(position.x - ray.origin.x, position.y - ray.origin.y,
+                    position.z - ray.origin.z);
+            if (len < 0f) return -1f;
+            float dist2 = position.dst2(ray.origin.x + ray.direction.x * len, ray.origin.y + ray.direction.y * len,
+                    ray.origin.z + ray.direction.z * len);
+            return (dist2 <= radius * radius) ? dist2 : -1f;
         }
     }
 }
