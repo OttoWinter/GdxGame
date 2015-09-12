@@ -51,7 +51,7 @@ public class PhysicsTest implements ApplicationListener {
     private btConstraintSolver constraintSolver;
     private MyContactListener contactListener;
 
-    private float spawnTimer;
+    private float spawnTimer, angle, speed = 90f;
 
     @Override
     public void create() {
@@ -121,12 +121,19 @@ public class PhysicsTest implements ApplicationListener {
         dynamicsWorld.setGravity(new Vector3(0, -10f, 0));
         contactListener = new MyContactListener();
 
+        addGroundObject();
+    }
+
+    private void addGroundObject() {
         GameObject ground = constructors.get("ground").construct();
         ground.body.setUserValue(0);
+        ground.body.setCollisionFlags(ground.body.getCollisionFlags()
+                | btCollisionObject.CollisionFlags.CF_KINEMATIC_OBJECT);
         instances.add(ground);
         dynamicsWorld.addRigidBody(ground.body, GROUND_FLAG, NOT_GROUND_FLAG);
         ground.body.setContactCallbackFlag(GROUND_FLAG);
         ground.body.setContactCallbackFilter(NONE_FLAG);
+        ground.body.setActivationState(Collision.DISABLE_DEACTIVATION);
     }
 
     private void setupInputProcessor() {
@@ -154,16 +161,7 @@ public class PhysicsTest implements ApplicationListener {
 
     @Override
     public void render() {
-        final float delta = Math.min(1f / 30f, Gdx.graphics.getDeltaTime());
-
-        dynamicsWorld.stepSimulation(delta, 5, 1 / 60f);
-
-        if ((spawnTimer -= delta) < 0) {
-            spawn();
-            spawnTimer = 0.25f;
-        }
-
-        cameraController.update();
+        transformations();
 
         Gdx.gl.glClearColor(0.3f, 0.3f, 0.3f, 1f);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT);
@@ -183,6 +181,28 @@ public class PhysicsTest implements ApplicationListener {
         label.setText(sb);
         stage.draw();
 
+    }
+
+    private void transformations() {
+        final float delta = Math.min(1f / 30f, Gdx.graphics.getDeltaTime());
+
+        physics(delta);
+
+        if ((spawnTimer -= delta) < 0) {
+            spawn();
+            spawnTimer = 0f;
+        }
+
+        cameraController.update();
+    }
+
+    private void physics(float delta) {
+        angle = (angle + delta * speed) % 360f;
+        instances.get(0).transform.setTranslation(0, MathUtils.sinDeg(angle) * 2.5f, 0f);
+        instances.get(0).body.setWorldTransform(instances.get(0).transform);
+        //instances.get(0).body.activate();
+
+        dynamicsWorld.stepSimulation(delta, 5, 1 / 60f);
     }
 
     private void spawn() {
